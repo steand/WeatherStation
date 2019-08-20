@@ -1,0 +1,3 @@
+(sym_lib_table
+  (lib (name ESP32-footprints-Shem-Lib)(type Legacy)(uri C:/Users/stefan/Develop/KiCad/library/ESP32-footprints-Shem-Lib.lib)(options "")(descr ""))
+)

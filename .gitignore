@@ -1,0 +1,7 @@
+.pio
+.clang_complete
+.gcc-flags.json
+*.sch-bak
+*.bak
+*.kicad_pcb-bak
+networkSetup.h
