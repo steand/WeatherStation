@@ -64,6 +64,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #define TAG_PRESSURE_ALTITUDE_SET MQTT_ROOT "Pressure/Altitude/set"
 #define TAG_BRIGHTNESS            MQTT_ROOT "Brightness"
 #define TAG_BATTERY               MQTT_ROOT "Battery"
+#define TAG_SOLARVOLT             MQTT_ROOT "SolarVoltage"
 
 const char *direction[] = {"N","NNO","NO","ONO","O","OSO","SO","SSO",
                            "S","SSW","SW","WSW","W","WNW","NW","NNW"} ;
@@ -274,6 +275,7 @@ void WeatherMQTT::publishAll() {
   pub(TAG_PRESSURE_ALTITUDE,this->altitude);
   pub(TAG_BRIGHTNESS,this->brightness);
   pub(TAG_BATTERY,this->battery);
+  pub(TAG_SOLARVOLT,this->solarVolt);
 }
 
 

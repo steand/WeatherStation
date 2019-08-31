@@ -29,6 +29,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include <Adafruit_Sensor.h>
 #include <Adafruit_BME280.h>
 #include "AOK5055.h"
+#include "ADCtoV.h"
 
 //include secure networkSetup.h, if exist
 #if __has_include("networkSetup.h")
@@ -53,15 +54,13 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #define DEFAULT_RAIN_PER_TICK 0.47       // one tic =  0.47 mm
 #define DEFAULT_WIND_SPEED_PER_TICK 2.4  //  one tic/second = 2.4 km/h
 #define DEFAULT_RAIN_ALARM_VALUE 3850    // max 4096 = no rain (ADC) must calibrated
-#define DEFAULT_WIND_ALARM_VALUE 15.0    // Alarm wenn Speed more then 15km/h
-#define DEFAULT_ALTITUDE 505             // Altidue over NN för relative Pressure
-
-#define PRESSURE_RELATIV_CORRECTION 63  // todo: als set realisieren
-
-#define RAINSENSOR_PIN 39
-#define RAINSENSOR_POWER 21    // Switch power on for meassurement
+#define DEFAULT_WIND_ALARM_VALUE 15.0    // Alarm when Speed more then 15km/h
+#define DEFAULT_ALTITUDE 505             // Altidue over NN for relative pressure
 #define DEFAULT_RAINSENSOR_ALARM_RESET_TIME 600  //ms
-
+#define DEFAULT_WIND_ALARM_RESET_TIME 600  //ms
+// RainSensor
+#define RAINSENSOR_PIN 39
+#define RAINSENSOR_POWER 21        // Switch power on for meassurement
 // I2C, BME280, BH1750
 #define WEATHER_I2C_SLC_PIN 19
 #define WEATHER_I2C_SLA_PIN 18
@@ -73,18 +72,23 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #define AOK_POWER_PIN 33
 #define AOK_WIND_SPEED_PIN 26
 #define AOK_WIND_DIRECTION_PIN 25
-#define DEFAULT_WIND_ALARM_RESET_TIME 600  //ms
-
 //battery
-#define BATTERY_PIN 36
-#define BATTERY_LOW  2630  //ADC Calibrate by voltage divider (3.3V)
-#define BATTERY_FULL 3737  //ADC Calibrate by voltage divider (4.2V)
+#define BATTERY_PIN ADC1_GPIO35_CHANNEL
+#define BATTERY_DIVIDER 1.0F  // ToDo: Kalliebrierung
+// solar panel
+#define SOLAR_ADC_PIN ADC1_GPIO35_CHANNEL
+#define SOLAR_POWER_PIN 32
+#define SOLAR_DIVIDER 10.9589F
+#define SOLAR_MIN_MPPT_VOLTAGE 16.0F   // If less SolarPanel will short disconnect
+
 
 WeatherMQTT  mqtt;
 RainSensor   rainSensor;
 BH1750 lightMeter(WEATHER_BH1750_ADDR);
 Adafruit_BME280 bme;
 AOK5055 aok;
+ADCtoV adc(ADC_UNIT_1);
+
 
 boolean wifiConnect(){
   DEBUG_println("Connect Wifi  " );
@@ -112,6 +116,8 @@ void checkBattery() {
   if (batt <= BATTERY_LOW) mqtt.battery = 0;
   else mqtt.battery = (byte)(((batt - BATTERY_LOW) *100)/(BATTERY_FULL-BATTERY_LOW));
 }
+
+
 
 
 void goSleep(unsigned long sleepTime){
@@ -189,7 +195,10 @@ void setup() {
     }
   rainSensor.begin(RAINSENSOR_PIN,RAINSENSOR_POWER,mqtt.rainAlarmValue);
   aok.begin(AOK_RAIN_PIN, AOK_POWER_PIN,AOK_WIND_SPEED_PIN, AOK_WIND_DIRECTION_PIN);
-
+  adc.attachChannel(BATTERY_PIN);
+  adc.attachChannel(SOLAR_ADC_PIN);
+  pinMode(SOLAR_POWER_PIN, OUTPUT);
+  digitalWrite(SOLAR_POWER_PIN, HIGH); // Switch on battery load
   gpio_wakeup_enable(AOK_RAIN_GPIO_PIN ,GPIO_INTR_HIGH_LEVEL);
   esp_sleep_enable_gpio_wakeup();
   mqtt.upTime = 0;
@@ -242,7 +251,10 @@ void cycleLoop() {
 
      // getSensors();
      // aok.countOneMinute();
-     checkBattery();
+     mqtt.battery = adc.read(BATTERY_PIN,BATTERY_DIVIDER);
+     mqtt.solarVolt = adc.read(SOLAR_ADC_PIN,SOLAR_DIVIDER);
+     // stop load battery for new calibration of MPPT
+     if (mqtt.solarVolt < SOLAR_MIN_MPPT_VOLTAGE) digitalWrite(SOLAR_POWER_PIN, LOW);
      byte windD = aok.getWindDirektion();
      if (windD < 16) mqtt.windDirection=windD;
      mqtt.rain1h  = aok.getRain1h(mqtt.rainPerTic);
@@ -261,6 +273,7 @@ void cycleLoop() {
        mqtt.loop();
      }
      esp_wifi_stop();
+     digitalWrite(SOLAR_POWER_PIN, HIGH);
 }
 
 

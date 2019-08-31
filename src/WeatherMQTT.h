@@ -63,6 +63,7 @@ public:
 	unsigned short altitude;      //altitude over NN
 	unsigned short brightness;      // 0..64000
 	byte battery;         // 0..100% (0=3.3V 100=4.2V)
+	float solarVolt;
 
 	WeatherMQTT();
 	void begin(const char server[],const char* clientID,const char* user,const char* password);
