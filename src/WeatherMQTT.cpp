@@ -26,6 +26,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #define MQTT_ROOT "WeatherStation/"
 
 #define TAG_STATE                 MQTT_ROOT "State"
+#define TAG_UPTIME                MQTT_ROOT "UpTime"
 #define TAG_SEND_CYCLE            MQTT_ROOT "SendCycle"
 #define TAG_SEND_CYCLE_SET        MQTT_ROOT "SendCycle/set"
 
@@ -40,6 +41,8 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #define TAG_WIND_ALARM            MQTT_ROOT "Wind/Alarm"
 #define TAG_WIND_ALARM_VALUE      MQTT_ROOT "Wind/Alarm/Value"
 #define TAG_WIND_ALARM_VALUE_SET  MQTT_ROOT "Wind/Alarm/Value/set"
+#define TAG_WIND_ALARM_RESET      MQTT_ROOT "Wind/Alarm/ResetTime"
+#define TAG_WIND_ALARM_RESET_SET  MQTT_ROOT "Wind/Alarm/ResetTime/set"
 // Rain
 #define TAG_RAIN                  MQTT_ROOT "Rain"
 #define TAG_RAIN_PER_TIC          MQTT_ROOT "Rain/PerTic"
@@ -51,10 +54,14 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #define TAG_RAIN_ALARM            MQTT_ROOT "Rain/Alarm"
 #define TAG_RAIN_ALARM_VALUE      MQTT_ROOT "Rain/Alarm/Value"
 #define TAG_RAIN_ALARM_VALUE_SET  MQTT_ROOT "Rain/Alarm/Value/set"
+#define TAG_RAIN_ALARM_RESET      MQTT_ROOT "Rain/Alarm/ResetTime"
+#define TAG_RAIN_ALARM_RESET_SET  MQTT_ROOT "Rain/Alarm/ResetTime/set"
 // const char *TAG_RAIN_ALARM_SET     =   MQTT_ROOT"Rain/Alarm/Value/set";
 // Environment
 #define TAG_HUMIDITY              MQTT_ROOT "Humidity"
 #define TAG_PRESSURE              MQTT_ROOT "Pressure"
+#define TAG_PRESSURE_ALTITUDE     MQTT_ROOT "Pressure/Altitude"
+#define TAG_PRESSURE_ALTITUDE_SET MQTT_ROOT "Pressure/Altitude/set"
 #define TAG_BRIGHTNESS            MQTT_ROOT "Brightness"
 #define TAG_BATTERY               MQTT_ROOT "Battery"
 
@@ -63,7 +70,7 @@ const char *direction[] = {"N","NNO","NO","ONO","O","OSO","SO","SSO",
 
 
 
-#define EEPROM_SIZE 16
+#define EEPROM_SIZE 22
 byte    locCycle;
 #define EEPROM_CYCLE_ADDR 1
 #define LOC_CYCLE_MIN 60
@@ -80,15 +87,23 @@ float   locWindAlarmValue;
 #define EEPROM_WIND_ALARM_VALUE_ADDR 10
 #define LOC_WIND_ALARM_VALUE_MIN 1.0
 #define LOC_WIND_ALARM_VALUE_MAX 50.0
+unsigned short locWindAlarmReset;
+#define EEPROM_WIND_ALARM_RESET_ADDR 14
 unsigned short locRainAlarmValue;
-#define EEPROM_RAIN_ALARM_VALUE_ADDR 14
+#define EEPROM_RAIN_ALARM_VALUE_ADDR 16
 #define LOC_RAIN_ALARM_VALUE_MIN 3500
 #define LOC_RAIN_ALARM_VALUE_MAX 4096
+unsigned short locRainAlarmReset;
+#define EEPROM_RAIN_ALARM_RESET_ADDR 18
+//pressure
+unsigned short locPressureAtlitude;
+#define EEPROM_PRESSURE_ALTITUDE_ADDR 20
+#define LOC_PRESSURE_ALTITUDE_MAX 8848  //Mount Everest ;-))
 
-boolean setResived = true; // First Time delete all set's from Broker
+boolean isResived = true; // First Time delete all set's from Broker
 
 void callback(String &topic, String &payload) {
-  setResived = true;
+  isResived = true;
   DEBUG_print("Callback resived:");
   DEBUG_print(topic);
   DEBUG_print("=");
@@ -105,8 +120,17 @@ void callback(String &topic, String &payload) {
   if (topic.equals(TAG_WIND_ALARM_VALUE_SET)) {
     locWindAlarmValue = payload.toInt();
   }
+  if (topic.equals(TAG_WIND_ALARM_RESET_SET)) {
+    locWindAlarmReset = payload.toInt();
+  }
   if (topic.equals(TAG_RAIN_ALARM_VALUE_SET)) {
     locRainAlarmValue = payload.toInt();
+  }
+  if (topic.equals(TAG_RAIN_ALARM_RESET_SET)) {
+    locRainAlarmReset = payload.toInt();
+  }
+  if (topic.equals(TAG_PRESSURE_ALTITUDE_SET)) {
+    locPressureAtlitude = payload.toInt();
   }
 }
 
@@ -121,7 +145,10 @@ void WeatherMQTT::saveData() {
   EEPROM.writeFloat(EEPROM_WIND_SPEED_PER_TIC_ADDR,this->windSpeedPerTic);
   EEPROM.writeFloat(EEPROM_RAIN_PER_TIC_ADDR,this->rainPerTic);
   EEPROM.writeByte(EEPROM_WIND_ALARM_VALUE_ADDR,this->windAlarmValue);
-  EEPROM.writeUInt(EEPROM_RAIN_ALARM_VALUE_ADDR,this->rainAlarmValue);
+  EEPROM.writeUShort(EEPROM_WIND_ALARM_RESET_ADDR, this->windAlarmResetTime);
+  EEPROM.writeUShort(EEPROM_RAIN_ALARM_VALUE_ADDR, this->rainAlarmValue);
+  EEPROM.writeUShort(EEPROM_RAIN_ALARM_RESET_ADDR, this->rainAlarmResetTime);
+  EEPROM.writeUShort(EEPROM_PRESSURE_ALTITUDE_ADDR, this->altitude);
   EEPROM.commit();
   EEPROM.end();
 }
@@ -133,7 +160,10 @@ boolean WeatherMQTT::restoreData() {
     this->windSpeedPerTic=EEPROM.readFloat(EEPROM_WIND_SPEED_PER_TIC_ADDR);
     this->rainPerTic=EEPROM.readFloat(EEPROM_RAIN_PER_TIC_ADDR);
     this->windAlarmValue=EEPROM.readByte(EEPROM_WIND_ALARM_VALUE_ADDR);
-    this->rainAlarmValue=EEPROM.readUInt(EEPROM_RAIN_ALARM_VALUE_ADDR);
+    this->windAlarmResetTime=EEPROM.readUShort(EEPROM_WIND_ALARM_RESET_ADDR);
+    this->rainAlarmValue=EEPROM.readUShort(EEPROM_RAIN_ALARM_VALUE_ADDR);
+    this->rainAlarmResetTime=EEPROM.readUShort(EEPROM_RAIN_ALARM_RESET_ADDR);
+    this->altitude=EEPROM.readUShort(EEPROM_PRESSURE_ALTITUDE_ADDR);
     EEPROM.end();
     return true;
   }
@@ -151,7 +181,14 @@ void WeatherMQTT::begin(const char *server,const char* clientID,const char* user
   client.onMessage(callback);
   client.setWill(TAG_STATE,"offline",true,0);
   client.setOptions(this->cycle+10, true, 1000);
-
+  locCycle = this->cycle;
+  locWindSpeedPerTic = this->windSpeedPerTic;
+  locRainPerTic = this->rainPerTic;
+  locWindAlarmValue = this->windAlarmValue;
+  locWindAlarmReset = this->windAlarmResetTime;
+  locRainAlarmValue = this->rainAlarmValue;
+  locRainAlarmReset = this->rainAlarmResetTime;
+  locPressureAtlitude = this->altitude;
 }
 
 
@@ -209,6 +246,9 @@ void WeatherMQTT::pub(String tag,boolean value) {
 
 
 void WeatherMQTT::publishAll() {
+  char s[20];
+  sprintf(s, "%lu:%02lu",this->upTime/60,this->upTime % 60);
+  pub(TAG_UPTIME,String(s));
   pub(TAG_SEND_CYCLE,this->cycle);
   pub(TAG_TEMPERATURE,this->temperature);
   pub(TAG_WIND_DIRECTION,String(direction[this->windDirection]));
@@ -218,6 +258,7 @@ void WeatherMQTT::publishAll() {
   pub(TAG_WIND_SPEED_MAX,this->windSpeedMax);
   pub(TAG_WIND_ALARM,this->windAlarm);
   pub(TAG_WIND_ALARM_VALUE,this->windAlarmValue);
+  pub(TAG_WIND_ALARM_RESET,this->windAlarmResetTime);
 
   pub(TAG_RAIN,this->rain);
   pub(TAG_RAIN_PER_TIC,this->rainPerTic);
@@ -226,9 +267,11 @@ void WeatherMQTT::publishAll() {
   pub(TAG_RAIN_SENSOR,this->rainSensor);
   pub(TAG_RAIN_ALARM,this->rainAlarm);
   pub(TAG_RAIN_ALARM_VALUE,this->rainAlarmValue);
+  pub(TAG_RAIN_ALARM_RESET,this->rainAlarmResetTime);
 
   pub(TAG_HUMIDITY,this->humidity);
   pub(TAG_PRESSURE,this->pressure);
+  pub(TAG_PRESSURE_ALTITUDE,this->altitude);
   pub(TAG_BRIGHTNESS,this->brightness);
   pub(TAG_BATTERY,this->battery);
 }
@@ -242,51 +285,62 @@ void WeatherMQTT::loop() {
       client.subscribe(TAG_WIND_SPEED_PER_TIC_SET);
       client.subscribe(TAG_RAIN_PER_TIC_SET);
       client.subscribe(TAG_WIND_ALARM_VALUE_SET);
+      client.subscribe(TAG_WIND_ALARM_RESET_SET);
       client.subscribe(TAG_RAIN_ALARM_VALUE_SET);
+      client.subscribe(TAG_RAIN_ALARM_RESET_SET);
+      client.subscribe(TAG_PRESSURE_ALTITUDE_SET);
       client.loop();
-      boolean changed=false;
-      if (((locCycle) != this->cycle) &&
-          (locCycle >= LOC_CYCLE_MIN) &&
-          (locCycle <= LOC_CYCLE_MAX)) {
-        this->cycle = locCycle;
-        changed=true;
-      };
-      if ((locWindSpeedPerTic != this->windSpeedPerTic) &&
-          (locWindSpeedPerTic >= LOC_WIND_SPEED_PER_TIC_MIN) &&
-          (locWindSpeedPerTic <= LOC_WIND_SPEED_PER_TIC_MAX)) {
-        this->windSpeedPerTic = locWindSpeedPerTic;
-        changed=true;
-      };
-      if ((locRainPerTic != this->rainPerTic) &&
-          (locRainPerTic >= LOC_RAIN_PER_TIC_MIN) &&
-          (locRainPerTic <= LOC_RAIN_PER_TIC_MAX)) {
-        this->rainPerTic = locRainPerTic;
-        changed=true;
-      };
-      if ((locWindAlarmValue != this->windAlarmValue) &&
-          (locWindAlarmValue >= LOC_WIND_ALARM_VALUE_MIN) &&
-          (locWindAlarmValue <= LOC_WIND_ALARM_VALUE_MAX)) {
-        this->windAlarmValue = locWindAlarmValue;
-        changed=true;
-      };
-      if ((locRainAlarmValue != this->rainAlarmValue) &&
-          (locRainAlarmValue >= LOC_RAIN_ALARM_VALUE_MIN) &&
-          (locRainAlarmValue <= LOC_RAIN_ALARM_VALUE_MAX)) {
-            DEBUG_println("Rain alarm chanded");
-        this->rainAlarmValue = locRainAlarmValue;
-        changed=true;
-      };
-      if (setResived) {
+      if (isResived) {
+        if (((locCycle) != this->cycle) &&
+            (locCycle >= LOC_CYCLE_MIN) &&
+            (locCycle <= LOC_CYCLE_MAX)) {
+            this->cycle = locCycle;
+            client.setOptions(this->cycle+10, true, 1000);
+        }
+        if ((locWindSpeedPerTic != this->windSpeedPerTic) &&
+            (locWindSpeedPerTic >= LOC_WIND_SPEED_PER_TIC_MIN) &&
+            (locWindSpeedPerTic <= LOC_WIND_SPEED_PER_TIC_MAX)) {
+            this->windSpeedPerTic = locWindSpeedPerTic;
+        }
+        if ((locRainPerTic != this->rainPerTic) &&
+            (locRainPerTic >= LOC_RAIN_PER_TIC_MIN) &&
+            (locRainPerTic <= LOC_RAIN_PER_TIC_MAX)) {
+              this->rainPerTic = locRainPerTic;
+        }
+        if ((locWindAlarmValue != this->windAlarmValue) &&
+            (locWindAlarmValue >= LOC_WIND_ALARM_VALUE_MIN) &&
+            (locWindAlarmValue <= LOC_WIND_ALARM_VALUE_MAX)) {
+              this->windAlarmValue = locWindAlarmValue;
+        }
+        if ((locWindAlarmReset != this->windAlarmResetTime)) {
+          this->windAlarmResetTime = locWindAlarmReset;
+        }
+        if ((locRainAlarmValue != this->rainAlarmValue) &&
+            (locRainAlarmValue >= LOC_RAIN_ALARM_VALUE_MIN) &&
+            (locRainAlarmValue <= LOC_RAIN_ALARM_VALUE_MAX)) {
+              this->rainAlarmValue = locRainAlarmValue;
+        }
+        if ((locRainAlarmReset != this->rainAlarmResetTime)) {
+          this->rainAlarmResetTime = locRainAlarmReset;
+        }
+        if ((locPressureAtlitude != this->altitude) &&
+            (locPressureAtlitude >= 0) &&
+            (locPressureAtlitude <= LOC_PRESSURE_ALTITUDE_MAX)) {
+              this->altitude = locPressureAtlitude;
+        }
         // delete all sets from Broker
           pub(TAG_SEND_CYCLE_SET,String("")); // delete from Broker
           pub(TAG_WIND_SPEED_PER_TIC_SET,String("")); // delete from Broker
           pub(TAG_RAIN_PER_TIC_SET,String("")); // delete from Broker
           pub(TAG_WIND_ALARM_VALUE_SET,String("")); // delete from Broker
+          pub(TAG_WIND_ALARM_RESET_SET,String("")); // delete from Broker
           pub(TAG_RAIN_ALARM_VALUE_SET,String("")); // delete from Broker
-          setResived = false;
+          pub(TAG_RAIN_ALARM_RESET_SET,String("")); // delete from Broker
+          pub(TAG_PRESSURE_ALTITUDE_SET,String("")); // delete from Broker
+          saveData();
+          isResived = false;
       }
       publishAll();
-      if (changed) saveData();
       delay(500);
       wifiClient.flush();
     }

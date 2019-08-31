@@ -25,12 +25,12 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #ifdef DEBUG
 #define DEBUG_print(__debug_x) Serial.print(__debug_x)
 #define DEBUG_println(__debug_x) Serial.println(__debug_x)
-#define DEBUG_printf(__debug_x,__debug_value) printf(__debug_x,__debug_value)
+#define DEBUG_printf(__debug_x, ...) printf(__debug_x,##__VA_ARGS__)
 #define DEBUG_begin(__debug_x) Serial.begin(__debug_x)
 #else
 #define DEBUG_print(__debug_x)
 #define DEBUG_println(__debug_x)
-#define DEBUG_printf(__debug_x,__debug_value)
+#define DEBUG_printf(__debug_x, ...)
 #define DEBUG_begin(__debug_x)
 #endif
 

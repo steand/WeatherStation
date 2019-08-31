@@ -1,6 +1,5 @@
 EESchema Schematic File Version 4
 LIBS:WeatherStation-cache
-LIBS:Module-cache
 EELAYER 30 0
 EELAYER END
 $Descr A4 11693 8268
@@ -174,7 +173,7 @@ U 1 1 5D566303
 P 2600 3300
 F 0 "U11" H 2750 3000 50  0000 L CNN
 F 1 "MIC5501-3.0YM5" H 2300 3600 50  0000 L CNN
-F 2 "TO_SOT_Packages_SMD:SOT-23-5" H 2600 2900 50  0001 C CNN
+F 2 "" H 2600 2900 50  0001 C CNN
 F 3 "http://ww1.microchip.com/downloads/en/DeviceDoc/MIC550X.pdf" H 2350 3550 50  0001 C CNN
 	1    2600 3300
 	1    0    0    1   
@@ -239,7 +238,7 @@ U 1 1 5D63877D
 P 5850 3250
 F 0 "D1" V 5896 3329 50  0000 L CNN
 F 1 "BAR43SFILM" V 5250 3000 50  0000 L CNN
-F 2 "TO_SOT_Packages_SMD:SOT-23" H 5850 3250 50  0001 C CNN
+F 2 "" H 5850 3250 50  0001 C CNN
 F 3 "~" H 5850 3250 50  0001 C CNN
 	1    5850 3250
 	0    1    -1   0   
@@ -250,7 +249,7 @@ U 1 1 5D63940E
 P 5500 3050
 F 0 "R7" H 5570 3096 50  0000 L CNN
 F 1 "470K" H 5570 3005 50  0000 L CNN
-F 2 "Resistors_SMD:R_0805" V 5430 3050 50  0001 C CNN
+F 2 "" V 5430 3050 50  0001 C CNN
 F 3 "~" H 5500 3050 50  0001 C CNN
 	1    5500 3050
 	-1   0    0    -1  
@@ -261,7 +260,7 @@ U 1 1 5D639D06
 P 5500 3450
 F 0 "R8" H 5570 3496 50  0000 L CNN
 F 1 "1M" H 5570 3405 50  0000 L CNN
-F 2 "Resistors_SMD:R_0805" V 5430 3450 50  0001 C CNN
+F 2 "" V 5430 3450 50  0001 C CNN
 F 3 "~" H 5500 3450 50  0001 C CNN
 	1    5500 3450
 	-1   0    0    -1  
@@ -382,7 +381,7 @@ U 1 1 5D5DDCEE
 P 8800 2850
 F 0 "U14" H 8775 3117 50  0000 C CNN
 F 1 "74LVC2G14" H 8775 3026 50  0000 C CNN
-F 2 "TO_SOT_Packages_SMD:SOT-363_SC-70-6" H 8800 2850 50  0001 C CNN
+F 2 "" H 8800 2850 50  0001 C CNN
 F 3 "https://www.ti.com/lit/ds/symlink/sn74lvc2g14.pdf" H 8800 2850 50  0001 C CNN
 	1    8800 2850
 	1    0    0    -1  
@@ -393,7 +392,7 @@ U 2 1 5D5DED14
 P 8850 3500
 F 0 "U14" H 8825 3767 50  0000 C CNN
 F 1 "74LVC2G14" H 8825 3676 50  0000 C CNN
-F 2 "TO_SOT_Packages_SMD:SOT-363_SC-70-6" H 8850 3500 50  0001 C CNN
+F 2 "" H 8850 3500 50  0001 C CNN
 F 3 "https://www.ti.com/lit/ds/symlink/sn74lvc2g14.pdf" H 8850 3500 50  0001 C CNN
 	2    8850 3500
 	1    0    0    -1  
@@ -447,27 +446,17 @@ Wire Wire Line
 Wire Wire Line
 	8150 3150 8450 3150
 Wire Wire Line
-	8800 3150 8800 2950
-Wire Wire Line
 	8450 3150 8450 3700
 Wire Wire Line
 	8450 3700 8850 3700
 Wire Wire Line
 	8850 3700 8850 3600
-Connection ~ 8450 3150
-Wire Wire Line
-	8450 3150 8800 3150
-Wire Wire Line
-	8850 3400 9200 3400
-Wire Wire Line
-	9200 3400 9200 3150
 Wire Wire Line
 	9200 3150 9500 3150
 Wire Wire Line
 	9200 3150 9200 2750
 Wire Wire Line
 	9200 2750 8800 2750
-Connection ~ 9200 3150
 Text Notes 9250 3150 0    50   ~ 0
 VCC
 Text Notes 8150 3150 0    50   ~ 0
@@ -535,4 +524,144 @@ Wire Wire Line
 	1550 5100 1400 5100
 Wire Wire Line
 	1550 4750 3250 4750
+$Comp
+L ESP:BAR43SFILM D?
+U 1 1 5D91C532
+P 5900 6400
+F 0 "D?" V 5946 6479 50  0000 L CNN
+F 1 "BAR43SFILM" V 5300 6150 50  0000 L CNN
+F 2 "" H 5900 6400 50  0001 C CNN
+F 3 "~" H 5900 6400 50  0001 C CNN
+	1    5900 6400
+	0    1    -1   0   
+$EndComp
+$Comp
+L Device:R R?
+U 1 1 5D91C538
+P 5550 6200
+F 0 "R?" H 5620 6246 50  0000 L CNN
+F 1 "100k" H 5620 6155 50  0000 L CNN
+F 2 "" V 5480 6200 50  0001 C CNN
+F 3 "~" H 5550 6200 50  0001 C CNN
+	1    5550 6200
+	-1   0    0    -1  
+$EndComp
+$Comp
+L Device:R R?
+U 1 1 5D91C53E
+P 5550 6600
+F 0 "R?" H 5620 6646 50  0000 L CNN
+F 1 "10k" H 5620 6555 50  0000 L CNN
+F 2 "" V 5480 6600 50  0001 C CNN
+F 3 "~" H 5550 6600 50  0001 C CNN
+	1    5550 6600
+	-1   0    0    -1  
+$EndComp
+Wire Wire Line
+	5700 6400 5550 6400
+Wire Wire Line
+	5550 6400 5550 6350
+Wire Wire Line
+	5550 6450 5550 6400
+Connection ~ 5550 6400
+$Comp
+L Connector_Generic:Conn_01x05 J?
+U 1 1 5D91C548
+P 4900 6400
+F 0 "J?" H 4850 6700 50  0000 L CNN
+F 1 "Conn_01x05" V 5000 6200 50  0000 L CNN
+F 2 "Socket_Strips:Socket_Strip_Straight_1x05_Pitch2.54mm" H 4900 6400 50  0001 C CNN
+F 3 "~" H 4900 6400 50  0001 C CNN
+	1    4900 6400
+	-1   0    0    -1  
+$EndComp
+$Comp
+L Connector_Generic:Conn_01x05 J?
+U 1 1 5D91C54E
+P 6450 6450
+F 0 "J?" H 6450 6150 50  0000 C CNN
+F 1 "Conn_01x05" V 6550 6450 50  0000 C CNN
+F 2 "Socket_Strips:Socket_Strip_Straight_1x05_Pitch2.54mm" H 6450 6450 50  0001 C CNN
+F 3 "~" H 6450 6450 50  0001 C CNN
+	1    6450 6450
+	1    0    0    1   
+$EndComp
+Wire Wire Line
+	5550 6400 5200 6400
+Wire Wire Line
+	5200 6400 5200 6300
+Wire Wire Line
+	5200 6200 5100 6200
+Connection ~ 5200 6400
+Wire Wire Line
+	5200 6400 5100 6400
+Wire Wire Line
+	5200 6400 5200 6500
+Wire Wire Line
+	5200 6600 5100 6600
+Wire Wire Line
+	5200 6500 5100 6500
+Connection ~ 5200 6500
+Wire Wire Line
+	5200 6500 5200 6600
+Wire Wire Line
+	5200 6300 5100 6300
+Connection ~ 5200 6300
+Wire Wire Line
+	5200 6300 5200 6200
+Wire Wire Line
+	6250 6250 6250 5900
+Wire Wire Line
+	6250 5900 5550 5900
+Wire Wire Line
+	5550 5900 5550 6050
+Wire Wire Line
+	6250 6350 6150 6350
+Wire Wire Line
+	6150 6350 6150 6050
+Wire Wire Line
+	6150 6050 5900 6050
+Wire Wire Line
+	5900 6050 5900 6100
+Wire Wire Line
+	6250 6550 6150 6550
+Wire Wire Line
+	6150 6550 6150 6800
+Wire Wire Line
+	6150 6800 6050 6800
+Wire Wire Line
+	5900 6800 5900 6700
+Wire Wire Line
+	6250 6650 6250 6850
+Wire Wire Line
+	6250 6850 6050 6850
+Wire Wire Line
+	5550 6850 5550 6750
+Wire Wire Line
+	6050 6850 6050 6800
+Wire Wire Line
+	6050 6850 5550 6850
+Wire Wire Line
+	6050 6800 5900 6800
+Connection ~ 6050 6800
+Connection ~ 6050 6850
+$Comp
+L Module:Mod_Spannungsteiler U?
+U 1 1 5D91C574
+P 5750 4850
+F 0 "U?" H 5700 5275 50  0000 C CNN
+F 1 "Mod_Spannungsteiler" H 5700 5184 50  0000 C CNN
+F 2 "Module:Mod_SOT23_TO_10DIL" H 5650 4450 50  0001 C CNN
+F 3 "" H 5550 4850 50  0001 C CNN
+	1    5750 4850
+	1    0    0    -1  
+$EndComp
+Wire Notes Line
+	4600 4300 6850 4300
+Wire Notes Line
+	6850 4300 6850 7200
+Wire Notes Line
+	6850 7200 4600 7200
+Wire Notes Line
+	4600 7200 4600 4300
 $EndSCHEMATC

@@ -22,7 +22,6 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 
 #define WIND_SPEED_MIN_MESSURE_TIME 1000
-#define WIND_SPEED_ALARM_RESET 5.0  // Rest Alarm (windAlarmValue - 5.0)
 
 
 // Rain handling
@@ -35,8 +34,8 @@ unsigned short rain24hArray[24];    // rain last day
 byte           rain24hIndex;
 
 
-void isrRain() {
-  if ((millis()-lastRainTick) > 5) { // kill all bounds les 5 ms
+void IRAM_ATTR isrRain() {
+  if ((millis()-lastRainTick) > 50) { // kill all bounds les 50 ms
     rainTicks++;
     lastRainTick = millis();
   }
@@ -86,7 +85,7 @@ void AOK5055::begin(uint8_t rainPin, uint8_t powerPin, uint8_t windSpeedPin, uin
   windSpeed10AverageIndex = 0;
   pinMode(rainPin,INPUT);
   pinMode(windSpeedPin,INPUT);
-  pinMode(windDirectionPin,INPUT);
+  pinMode(windDirectionPin,INPUT_PULLDOWN);
   pinMode(powerPin,OUTPUT);
   digitalWrite(this->powerPin, LOW); // Power off
 
@@ -109,44 +108,41 @@ void AOK5055::startWindSpeed() {
 }
 
 float AOK5055::stopWindSpeed(float windSpeedPerTic) {
-  unsigned long windSpeedNow = 0;
+  float windSpeedNow = 0.0;
   while (((millis() - startWindTime) <= WIND_SPEED_MIN_MESSURE_TIME) &&
            (windTicks < 3) ) delay(10);
   // digitalWrite(4,LOW);  // Test only
   detachInterrupt(digitalPinToInterrupt(this->windSpeedPin));
-  DEBUG_println("WindSpeed needs (ms):" + String(millis() - startWindTime));
+  DEBUG_printf("WindSpeed needs: %lu ms",millis() - startWindTime);
   // ToDo Speed berechnen
-  windSpeedAverage[windSpeedAverageIndex] = WIND_SPEED_MIN_MESSURE_TIME*2;
+  windSpeedAverage[windSpeedAverageIndex] = 0xFFFF; // time = 1/speed
   if (windTicks == 1 ) windSpeedAverage[windSpeedAverageIndex] = WIND_SPEED_MIN_MESSURE_TIME;
   if (windTicks == 2 ) windSpeedAverage[windSpeedAverageIndex] = windSpeedArray[1]-windSpeedArray[0];
   if (windTicks == 3 ) windSpeedAverage[windSpeedAverageIndex] = (windSpeedArray[2]-windSpeedArray[0])/2;
-  DEBUG_println("stopWind index #" + String(windSpeedAverageIndex) +" -> " + String(windSpeedAverage[windSpeedAverageIndex]));
+  if (windSpeedAverage[windSpeedAverageIndex] == 0) windSpeedAverage[windSpeedAverageIndex] = 0xFFFF; //secure
+  DEBUG_printf("stopWind Index: #%d -> #%d\n", windSpeedAverageIndex,windSpeedAverage[windSpeedAverageIndex]);
   if (++windSpeedAverageIndex >= 6 ) {
     windSpeedAverageIndex = 0;
     windSpeedNow = 0;
-    for (byte i=0;i<6;i++ ) windSpeedNow = windSpeedNow + windSpeedAverage[i];
-    windSpeed10Average[windSpeed10AverageIndex] = windSpeedNow / 6;
+    for (byte i=0;i<6;i++ ) windSpeedNow = windSpeedNow + 1.0F/windSpeedAverage[i];
+    windSpeed10Average[windSpeed10AverageIndex] = 1/(windSpeedNow / 6);
     if (++windSpeed10AverageIndex >= 10) windSpeed10AverageIndex = 0;
   }
   windSpeedNow = 0;
-  for (byte i= 0;i<6;i++) windSpeedNow += windSpeedAverage[i];
-  if (windSpeedNow > 0) {
-      DEBUG_println("WindSpeed now is (km/h):" + String(windSpeedPerTic * (1000.0/ (float)(windSpeedNow/6))));
-      return windSpeedPerTic * (1000.0/ (float)(windSpeedNow/6));
-  } else return 0;
+  for (byte i= 0;i<6;i++) windSpeedNow += 1000.0F/windSpeedAverage[i];
+  DEBUG_printf("WindSpeed now is %.1f km/h\n",windSpeedPerTic * windSpeedNow/6);
+  return windSpeedPerTic * (windSpeedNow/6);
 }
 
 
 // get Averange of 10 Minutes
 // WMO definition
 float AOK5055::getWindSpeed(float windSpeedPerTic) {
-   unsigned long ws = 0;
-   for (byte i= 0;i<10;i++) ws += windSpeed10Average[i];
-   ws = ws / 10;
-   printf("WindSpeed : %ld ms\n",ws);
-   printf("WindSpeed : %f 1/s\n",(1000.0/ (float)(ws)));
-   printf("WindSpeed : %f km/h\n",windSpeedPerTic * (1000.0/ (float)(ws)));
-   return windSpeedPerTic * (1000.0/ (float)(ws));
+   float ws = 0;
+   for (byte i= 0;i<10;i++) ws += 1000.0F/windSpeed10Average[i];
+   ws = ws / 10.0;
+   DEBUG_printf("%f 1/s - %.1f km/h\n",ws, windSpeedPerTic * ws);
+   return windSpeedPerTic * ws;
 }
 
 
@@ -156,11 +152,7 @@ float AOK5055::getWindSpeedMax(float windSpeedPerTic) {
   for (byte i= 0;i<10;i++) {
     if ((windSpeed10Average[i] < ws )) ws = windSpeed10Average[i];
   }
-  return windSpeedPerTic * (1000.0/ (float)(ws));
-}
-
-boolean  AOK5055::getWindAlarm(byte windAlarmValue, float windSpeedPerTic) {
-  return ( getWindSpeedNow(windSpeedPerTic) >= windAlarmValue);
+  return windSpeedPerTic * (1000.0F/ (float)(ws));
 }
 
 
@@ -172,16 +164,16 @@ byte AOK5055::getWindDirektion() {
   unsigned long m;
   digitalWrite(this->powerPin, HIGH); // Power on
   // Search Start Bit
-  m = pulseIn(windDirectionPin, HIGH,20000000);
+  m = pulseIn(windDirectionPin, HIGH,1000000);
   if  (m == 0) {
     DEBUG_println("getWindDirektion: TimeOut start bit not found");
     return 255;
   }
-//   DEBUG_println("Found: " + String(m));
+   DEBUG_println("Found: " + String(m));
 //  Format: 010dddd
   uint8_t direction = 0;
   for (i=6;i>=0; i--) {
-    m = pulseIn(windDirectionPin,HIGH,20000);
+    m = pulseIn(windDirectionPin,HIGH,5000);
 //    DEBUG_println(m);
     if ( m >750 ) bitSet(direction,i);
   }
@@ -206,9 +198,7 @@ void AOK5055::countOneMinute(){
 
 float AOK5055::getRain(float rainPerTic) {  // Return Rain of last cycle
   float rain = rainPerTic * (float)(rainTicks-rainCycle);
-  DEBUG_print("getRain Tics #" + String(rainTicks));
-  DEBUG_print(" getRain Tics #" + String(rainTicks-rainCycle));
-  DEBUG_println("    Rain :" + String(rain));
+  DEBUG_printf("getRain Tics Summe: #%lu, Delta: #%lu, Rain %fmm\n",rainTicks,rainTicks-rainCycle,rain);
   rainCycle = rainTicks;
 return rain;
 }

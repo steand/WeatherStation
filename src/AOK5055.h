@@ -41,7 +41,6 @@ public:
   float    getWindSpeedNow(float windSpeedPerTic);       // get mean of 60 last meassures (~1 minute)
   void     countOneMinute();                          // must call every minute
   float    getWindSpeedMax(float windSpeedPerTic);    // get max of 6 last meassures (~1 minute)
-  boolean  getWindAlarm(byte windAlarmValue, float windSpeedPerTic);
   byte     getWindDirektion();
   float    getRain(float rainPerTic);     // mm of last cycle
   float    getRain1h(float rainPerTic);  // mm of last 60 meassures accuracy by 5 (~1 hour) (most use)

@@ -49,8 +49,7 @@ unsigned int RainSensor::read(){
   digitalWrite(this->powerPin, HIGH);
   delay(100);
   unsigned int i=analogRead(this->adcPin);
-  DEBUG_printf("Rain pin is %d\n",this->adcPin);
-  DEBUG_printf("Rain is %d\n",i);
+  DEBUG_printf("Rain pin: %d, Value: %d\n",this->adcPin,i);
   digitalWrite(this->powerPin, LOW);
   if (i < this->alarmLevel) this->alarm = true;
   if (i > this->alarmLevel+ALARMRESET) this->alarm = false;

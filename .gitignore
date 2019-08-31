@@ -5,3 +5,5 @@
 *.bak
 *.kicad_pcb-bak
 networkSetup.h
+.~lock.*
+*.ods#

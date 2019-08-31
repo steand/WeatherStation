@@ -30,7 +30,11 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include <Adafruit_BME280.h>
 #include "AOK5055.h"
 
-#include "networkSetup.h"  //my secure networkSetup (no GitHub)
+//include secure networkSetup.h, if exist
+#if __has_include("networkSetup.h")
+#include "networkSetup.h"
+#endif
+
 #ifndef NETWORKSETUP_H
 //Wifi
 #define WIFI_SSID     "<your-SSID>"
@@ -45,34 +49,36 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #endif
 
 // defaults
-#define DEFAULT_SEND_CYCLE 60            // send every 180s
+#define DEFAULT_SEND_CYCLE 60           // send every 3 Minutes
 #define DEFAULT_RAIN_PER_TICK 0.47       // one tic =  0.47 mm
 #define DEFAULT_WIND_SPEED_PER_TICK 2.4  //  one tic/second = 2.4 km/h
-#define DEFAULT_RAIN_ALARM_VALUE 4000    // max 4096 = no rain (ADC) must calibrated
+#define DEFAULT_RAIN_ALARM_VALUE 3850    // max 4096 = no rain (ADC) must calibrated
 #define DEFAULT_WIND_ALARM_VALUE 15.0    // Alarm wenn Speed more then 15km/h
 #define DEFAULT_ALTITUDE 505             // Altidue over NN för relative Pressure
 
 #define PRESSURE_RELATIV_CORRECTION 63  // todo: als set realisieren
 
-#define RAINSENSOR_PIN 35
-#define RAINSENSOR_POWER 32    // Switch power on for meassurement
+#define RAINSENSOR_PIN 39
+#define RAINSENSOR_POWER 21    // Switch power on for meassurement
+#define DEFAULT_RAINSENSOR_ALARM_RESET_TIME 600  //ms
 
 // I2C, BME280, BH1750
-#define WEATHER_I2C_SLC_PIN 33
-#define WEATHER_I2C_SLA_PIN 25
+#define WEATHER_I2C_SLC_PIN 19
+#define WEATHER_I2C_SLA_PIN 18
 #define WEATHER_BH1750_ADDR 0x23
 #define BRIGHTNESS_FACTOR 1.44
 // AOK5055
-#define AOK_RAIN_PIN 26
-#define AOK_RAIN_GPIO_PIN GPIO_NUM_26
-#define AOK_POWER_PIN 27
-#define AOK_WIND_SPEED_PIN 12
-#define AOK_WIND_DIRECTION_PIN 14
+#define AOK_RAIN_PIN 27
+#define AOK_RAIN_GPIO_PIN GPIO_NUM_27
+#define AOK_POWER_PIN 33
+#define AOK_WIND_SPEED_PIN 26
+#define AOK_WIND_DIRECTION_PIN 25
+#define DEFAULT_WIND_ALARM_RESET_TIME 600  //ms
 
 //battery
-#define BATTERY_PIN 39
-#define BATTERY_LOW  2475  //ADC Calibrate by voltage divider (3.3V)
-#define BATTERY_FULL 3280  //ADC Calibrate by voltage divider (4.2V)
+#define BATTERY_PIN 36
+#define BATTERY_LOW  2630  //ADC Calibrate by voltage divider (3.3V)
+#define BATTERY_FULL 3737  //ADC Calibrate by voltage divider (4.2V)
 
 WeatherMQTT  mqtt;
 RainSensor   rainSensor;
@@ -96,7 +102,7 @@ boolean wifiConnect(){
   DEBUG_println("");
   DEBUG_printf("Connection takes : %dms\n",i*100);
   DEBUG_print("Mac address: "); DEBUG_println(WiFi.macAddress());
-  DEBUG_print("IP address: "); DEBUG_println(WiFi.localIP());
+  DEBUG_print("IP address: ");  DEBUG_println(WiFi.localIP());
   return true;
 }
 
@@ -104,10 +110,7 @@ void checkBattery() {
   unsigned int batt = (int)analogRead(BATTERY_PIN);
   DEBUG_println("Battery : " + String(batt));
   if (batt <= BATTERY_LOW) mqtt.battery = 0;
-  else {
-    if (batt >= BATTERY_FULL) mqtt.battery = 100;
-    else mqtt.battery = (byte)(((batt - BATTERY_LOW) *100)/(BATTERY_FULL-BATTERY_LOW));
-  }
+  else mqtt.battery = (byte)(((batt - BATTERY_LOW) *100)/(BATTERY_FULL-BATTERY_LOW));
 }
 
 
@@ -138,18 +141,27 @@ void goSleep(unsigned long sleepTime){
 }
 
 void readDefault() {
-//  if (!mqtt.restoreData()) {
+  if (!mqtt.restoreData()) {
     mqtt.cycle = DEFAULT_SEND_CYCLE;
     mqtt.windSpeedPerTic = DEFAULT_WIND_SPEED_PER_TICK;
     mqtt.rainPerTic = DEFAULT_RAIN_PER_TICK;
     mqtt.windAlarmValue = DEFAULT_WIND_ALARM_VALUE;
+    mqtt.windAlarmResetTime = DEFAULT_WIND_ALARM_RESET_TIME;
     mqtt.rainAlarmValue = DEFAULT_RAIN_ALARM_VALUE;
+    mqtt.rainAlarmResetTime = DEFAULT_RAINSENSOR_ALARM_RESET_TIME;
+    mqtt.altitude = 505;
     mqtt.saveData();
-//  }
+  }
 }
+
+unsigned long oneMinute;
+unsigned long cycleTime;
+unsigned long cycleStartTime;
+unsigned long startTime ;
 
 
 void setup() {
+  delay(1000); // Delay for load Elko's
   DEBUG_begin(115200);
   DEBUG_println("WeatherStation start in DEBUG Mode.");
 
@@ -180,36 +192,53 @@ void setup() {
 
   gpio_wakeup_enable(AOK_RAIN_GPIO_PIN ,GPIO_INTR_HIGH_LEVEL);
   esp_sleep_enable_gpio_wakeup();
+  mqtt.upTime = 0;
+  oneMinute =  millis();
+  cycleTime =  (unsigned long)mqtt.cycle * 1000;
+  cycleStartTime = millis();
 }
 
 
+unsigned long rainAlarmTime,windAlarmTime;
 
 void everyLoop() {
   boolean locAlarm=false;
   aok.startWindSpeed();
   mqtt.rain = aok.getRain(mqtt.rainPerTic);
   mqtt.windSpeedNow = aok.stopWindSpeed(mqtt.windSpeedPerTic);
-  if ( !mqtt.windAlarm && (mqtt.windSpeedNow >= mqtt.windAlarmValue)) {
-      mqtt.windAlarm = true;
-      locAlarm =true;
+  if (mqtt.windSpeedNow >= mqtt.windAlarmValue) {
+      windAlarmTime = millis();
+      if ( !mqtt.windAlarm) {
+        locAlarm =true;
+        mqtt.windAlarm = true;
+      }
   }
   mqtt.rainSensor=rainSensor.read();
-  if (!mqtt.rainAlarm && rainSensor.getAlarm()) {
-    mqtt.rainAlarm = true;
-    locAlarm =true;
+  if (mqtt.rainSensor <= mqtt.rainAlarmValue) {
+    windAlarmTime = millis();
+    if (!mqtt.rainAlarm) {
+      locAlarm =true;
+      mqtt.rainAlarm = true;
+    }
   }
   if (locAlarm) {  // send Alarm Info
     esp_wifi_start();
-    if (wifiConnect()) {
-      mqtt.sendAlarm();
+    delay(500);
+   if (wifiConnect()) {
+       mqtt.sendAlarm();
     }
     esp_wifi_stop();
+    delay(500);
     locAlarm = false;
   }
 }
 
 void cycleLoop() {
      // Todo: reset Alarm
+     if ((mqtt.windAlarm) &&
+        (millis()-windAlarmTime > mqtt.windAlarmResetTime*1000)) mqtt.windAlarm = false;
+     if ((mqtt.rainAlarm) &&
+         (millis()-rainAlarmTime > mqtt.rainAlarmResetTime*1000)) mqtt.rainAlarm = false;
 
      // getSensors();
      // aok.countOneMinute();
@@ -221,10 +250,11 @@ void cycleLoop() {
      mqtt.windSpeed = aok.getWindSpeed(mqtt.windSpeedPerTic);
      mqtt.windSpeedMax = aok.getWindSpeedMax(mqtt.windSpeedPerTic);
      mqtt.brightness=lightMeter.readLightLevel()*BRIGHTNESS_FACTOR;
-     DEBUG_println("Brightness : " + String(mqtt.brightness));
+     DEBUG_printf("Brightness : %d \n",mqtt.brightness);
      mqtt.temperature = bme.readTemperature();
      mqtt.humidity = bme.readHumidity();
-     mqtt.pressure = (bme.readPressure()/100) + PRESSURE_RELATIV_CORRECTION;
+     float Th = mqtt.temperature + 273.15;
+     mqtt.pressure = bme.readPressure()/100.0F * pow( Th / (Th + (0.0065 * mqtt.altitude)), -5.255);
      // send MQTT
      esp_wifi_start();
      if (wifiConnect()) {
@@ -237,33 +267,27 @@ void cycleLoop() {
 byte loopCountMinute = 0;
 int loopCountAll = 0;
 
-unsigned long oneMinute = 0;
-unsigned long cycleTime = 0;
-unsigned long startTime = 0;
-
 void loop() {
   startTime = millis() ;
-  DEBUG_println("everyLoop-------------------------:" + String(oneMinute));
+  DEBUG_printf("everyLoop------------------------- %lu\n\n",millis()-oneMinute);
   everyLoop();
 
- if (oneMinute >= 60000) {
-   DEBUG_println("1 Minute Hardbeat #"+ String(oneMinute));
-   oneMinute = 0 ;
+ if (millis() - oneMinute >= 60000) {
+   DEBUG_printf("One Minute Hardbeat____________________ %lu\n\n",millis()-oneMinute);
+   oneMinute = millis();
+   mqtt.upTime++;
    aok.countOneMinute();
  }
 
-if (cycleTime >= (unsigned long)mqtt.cycle * 1000) {
-   DEBUG_println("Cycle Hardbeat_________________________:"+ String(cycleTime));
-
-   cycleTime =  0;
+if (millis() - cycleStartTime >= cycleTime) {
+   DEBUG_printf("Cycle Hardbeat_________________________ %lu\n",millis() - cycleStartTime);
+   cycleStartTime = millis();
    cycleLoop();
+   cycleTime =  (unsigned long)mqtt.cycle * 1000; //if Updated
  }
 
 unsigned long neededTime =  millis()-startTime; // needed Time
-
-goSleep(10000-neededTime);
-oneMinute  += millis()-startTime;
-cycleTime  += millis()-startTime;
-DEBUG_println("Loop needs : "+ String(millis()-startTime) + "ms");
-
+DEBUG_printf("Aktive Loop needs : %lu ms\n\n",neededTime);
+if (neededTime<10000) goSleep(10000-neededTime);
+DEBUG_printf("Loop needs : %lu ms\n",millis()-startTime);
 }

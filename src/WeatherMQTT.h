@@ -39,6 +39,7 @@ private:
 	void publishAll();
 
 public:
+	unsigned long  upTime ; // Uptime in Minutes
 	unsigned short cycle;  // SendCycle in seconds
 	float temperature;     // xx.x °C
 	byte windDirection;    // "N","NNO","NO","ONO","O"..."NNW"; 0=N,15=NNW
@@ -48,6 +49,7 @@ public:
 	float windSpeedMax;    // KM/h Max from last 10 minutes
 	boolean windAlarm;     // true if windAlarmValue <= windSpeedMax
 	float windAlarmValue;  // km/h
+	unsigned short windAlarmResetTime; // time in millis
   float rain;            // mm(l)/h summe of last 3 Minute *20
 	float rainPerTic;
 	float rain1h;          // mm(l) of last h
@@ -55,8 +57,10 @@ public:
 	unsigned short rainSensor;      // 0..4096
 	boolean rainAlarm;            //
 	unsigned short rainAlarmValue;  // calibrate 0 (0..4096)
+	unsigned short rainAlarmResetTime; // time in millis
 	byte humidity;                // 0..100%
 	unsigned short pressure;        // mbar
+	unsigned short altitude;      //altitude over NN
 	unsigned short brightness;      // 0..64000
 	byte battery;         // 0..100% (0=3.3V 100=4.2V)
 
