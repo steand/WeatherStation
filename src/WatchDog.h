@@ -1,5 +1,5 @@
 /*
-Debug.h - Include file for debuging via Serial.
+WatchDog.h - Include file.
 Copyright (C) 2019  by Stefan Andres
 
 This program is free software: you can redistribute it and/or modify
@@ -16,23 +16,22 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-#ifndef DEBUG_H_
-#define DEBUG_H_
+#ifndef WATCHDOG_H_
+#define WATCHDOG_H_
 
-// for debuging on uncomment follow line else comment for debuging off
-//#define DEBUG
+#include "Arduino.h"
+#include "esp_system.h"
+#include <rom/rtc.h>
 
-#ifdef DEBUG
-#define DEBUG_print(__debug_x) Serial.print(__debug_x)
-#define DEBUG_println(__debug_x) Serial.println(__debug_x)
-#define DEBUG_printf(__debug_x, ...) printf(__debug_x,##__VA_ARGS__)
-#define DEBUG_begin(__debug_x) Serial.begin(__debug_x)
-#else
-#define DEBUG_print(__debug_x)
-#define DEBUG_println(__debug_x)
-#define DEBUG_printf(__debug_x, ...)
-#define DEBUG_begin(__debug_x)
-#endif
+class WatchDog{
+private:
+   hw_timer_t *timer = NULL;
 
+public:
+   WatchDog();
+   void start(byte time); // time in second
+   void feed();
+   unsigned short isSoftwareReset();
+};
 
 #endif /* DEBUG_H_ */

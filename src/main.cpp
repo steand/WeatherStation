@@ -30,13 +30,14 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include <Adafruit_BME280.h>
 #include "AOK5055.h"
 #include "ADCtoV.h"
+#include "WatchDog.h"
 
 //include secure networkSetup.h, if exist
 #if __has_include("networkSetup.h")
 #include "networkSetup.h"
 #endif
 
-#ifndef NETWORKSETUP_H
+#ifndef NETWORKSETUP_H_
 //Wifi
 #define WIFI_SSID     "<your-SSID>"
 #define WIFI_PASSWORD "<your-Password>"
@@ -49,8 +50,10 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 #endif
 
+#define WIFI_CONNECT_TIMEOUT 1500   //ms wait to connect
+
 // defaults
-#define DEFAULT_SEND_CYCLE 60           // send every 3 Minutes
+#define DEFAULT_SEND_CYCLE 180           // send every 3 Minutes
 #define DEFAULT_RAIN_PER_TICK 0.47       // one tic =  0.47 mm
 #define DEFAULT_WIND_SPEED_PER_TICK 2.4  //  one tic/second = 2.4 km/h
 #define DEFAULT_RAIN_ALARM_VALUE 3850    // max 4096 = no rain (ADC) must calibrated
@@ -67,16 +70,16 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #define WEATHER_BH1750_ADDR 0x23
 #define BRIGHTNESS_FACTOR 1.44
 // AOK5055
-#define AOK_RAIN_PIN 27
-#define AOK_RAIN_GPIO_PIN GPIO_NUM_27
+#define AOK_RAIN_PIN 16
+#define AOK_RAIN_GPIO_PIN GPIO_NUM_16
 #define AOK_POWER_PIN 33
 #define AOK_WIND_SPEED_PIN 26
 #define AOK_WIND_DIRECTION_PIN 25
 //battery
-#define BATTERY_PIN ADC1_GPIO35_CHANNEL
-#define BATTERY_DIVIDER 1.0F  // ToDo: Kalliebrierung
+#define BATTERY_PIN ADC1_GPIO36_CHANNEL
+#define BATTERY_DIVIDER 1.4102F  // ToDo: Kalliebrierung
 // solar panel
-#define SOLAR_ADC_PIN ADC1_GPIO35_CHANNEL
+#define SOLAR_ADC_PIN ADC1_GPIO34_CHANNEL
 #define SOLAR_POWER_PIN 32
 #define SOLAR_DIVIDER 10.9589F
 #define SOLAR_MIN_MPPT_VOLTAGE 16.0F   // If less SolarPanel will short disconnect
@@ -89,20 +92,23 @@ Adafruit_BME280 bme;
 AOK5055 aok;
 ADCtoV adc(ADC_UNIT_1);
 
-
 boolean wifiConnect(){
-  DEBUG_println("Connect Wifi  " );
+  DEBUG_println("Connect Wifi");
+  WiFi.mode(WIFI_STA);
+  delay(10);
   WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
   int i = 0;
   while ( WiFi.status() != WL_CONNECTED ) {
     DEBUG_print("." );
     delay(100);
-    if (i++ > 30) {
+    if (i++ > WIFI_CONNECT_TIMEOUT/100) {
       DEBUG_println("!");
       DEBUG_println("Wifi connection died!!!!");
       return false;
     }
   }
+  delay(10);
+  DEBUG_printf("WiFi Status: %d -> On\n", (WiFi.status())); // spend time for system CPU
   DEBUG_println("");
   DEBUG_printf("Connection takes : %dms\n",i*100);
   DEBUG_print("Mac address: "); DEBUG_println(WiFi.macAddress());
@@ -110,24 +116,22 @@ boolean wifiConnect(){
   return true;
 }
 
-void checkBattery() {
-  unsigned int batt = (int)analogRead(BATTERY_PIN);
-  DEBUG_println("Battery : " + String(batt));
-  if (batt <= BATTERY_LOW) mqtt.battery = 0;
-  else mqtt.battery = (byte)(((batt - BATTERY_LOW) *100)/(BATTERY_FULL-BATTERY_LOW));
+
+void wifiDisconnect(){
+  WiFi.disconnect();
+  delay(10);
+  DEBUG_printf("WiFi Status: %d -> Disconnect\n", (WiFi.status())); // spend time for system CPU
+  delay(10);  // spend time for system CPU
+  WiFi.mode(WIFI_OFF);
+  delay(10);
+  DEBUG_printf("WiFi Status: %d -> Off\n", (WiFi.status())); // spend time for system CPU
 }
-
-
-
 
 void goSleep(unsigned long sleepTime){
   unsigned long start = millis();
-  DEBUG_println("Sleep");
-  #ifdef DEBUG
-    delay(500);
-  #endif
-  esp_sleep_enable_timer_wakeup((sleepTime-(millis()-start))*1000);
+  esp_sleep_enable_timer_wakeup((sleepTime*1000));
   esp_light_sleep_start();
+  unsigned long sleep = sleepTime-(millis()-start);
   switch (esp_sleep_get_wakeup_cause()) {
     case ESP_SLEEP_WAKEUP_TIMER: {
       DEBUG_printf("Wake up from timer. Time spent in sleep: %ldms\n", millis()-start);
@@ -136,13 +140,15 @@ void goSleep(unsigned long sleepTime){
     case ESP_SLEEP_WAKEUP_GPIO: { // Rain wipp
       Serial.println("Wake up from GPIO (Rain)");
         // go sleep for rest of time (Realtime)
-      while(sleepTime > (millis()-start)) delay(5);
+      if (sleep<sleepTime) delay(sleep);
       break;
     }
-      default: {
-        DEBUG_println("Wake up from other.");
-        break;
-      }
+    default: {
+      DEBUG_println("Wake up from other.");
+      // go sleep for rest of time (Realtime)
+      if (sleep<sleepTime) delay(sleep);
+      break;
+    }
   }
 }
 
@@ -170,6 +176,9 @@ void setup() {
   delay(1000); // Delay for load Elko's
   DEBUG_begin(115200);
   DEBUG_println("WeatherStation start in DEBUG Mode.");
+  WiFi.mode(WIFI_STA);
+  delay(10);  // spend time for system CPU
+  wifiDisconnect();
 
   // bt not need
   esp_bt_controller_disable();
@@ -188,7 +197,7 @@ void setup() {
     }
   // BME280
   	if (!bme.begin(0x76)) {
-  			DEBUG_println("Could not find a valid BME280 sensor, check wiring!");
+  		DEBUG_println("Could not find a valid BME280 sensor, check wiring!");
   	}
     else {
       DEBUG_println("Initialising BME280 OK");
@@ -205,58 +214,52 @@ void setup() {
   oneMinute =  millis();
   cycleTime =  (unsigned long)mqtt.cycle * 1000;
   cycleStartTime = millis();
+//  dog.start(20);
 }
 
 
 unsigned long rainAlarmTime,windAlarmTime;
 
-void everyLoop() {
-  boolean locAlarm=false;
-  aok.startWindSpeed();
-  mqtt.rain = aok.getRain(mqtt.rainPerTic);
-  mqtt.windSpeedNow = aok.stopWindSpeed(mqtt.windSpeedPerTic);
-  if (mqtt.windSpeedNow >= mqtt.windAlarmValue) {
-      windAlarmTime = millis();
-      if ( !mqtt.windAlarm) {
-        locAlarm =true;
-        mqtt.windAlarm = true;
-      }
-  }
+boolean checkRainAlarm() {
   mqtt.rainSensor=rainSensor.read();
   if (mqtt.rainSensor <= mqtt.rainAlarmValue) {
     windAlarmTime = millis();
     if (!mqtt.rainAlarm) {
-      locAlarm =true;
       mqtt.rainAlarm = true;
+      return true;
     }
+  } else {
+    if (millis()-rainAlarmTime > mqtt.rainAlarmResetTime*1000) mqtt.rainAlarm = false;
   }
-  if (locAlarm) {  // send Alarm Info
-    esp_wifi_start();
-    delay(500);
-   if (wifiConnect()) {
-       mqtt.sendAlarm();
-    }
-    esp_wifi_stop();
-    delay(500);
-    locAlarm = false;
+  return false;
+}
+
+boolean checkWindAlarm(){
+  if (mqtt.windSpeedNow >= mqtt.windAlarmValue) {
+      windAlarmTime = millis();
+      if ( !mqtt.windAlarm) {
+        mqtt.windAlarm = true;
+        return true;
+      }
+  } else {
+    if (millis()-windAlarmTime > mqtt.windAlarmResetTime*1000) mqtt.windAlarm = false;
   }
+  return false;
+}
+
+void everyLoop() {
+  aok.startWindSpeed();
+  mqtt.rain = aok.getRain(mqtt.rainPerTic);
+  mqtt.windSpeedNow = aok.stopWindSpeed(mqtt.windSpeedPerTic);
 }
 
 void cycleLoop() {
-     // Todo: reset Alarm
-     if ((mqtt.windAlarm) &&
-        (millis()-windAlarmTime > mqtt.windAlarmResetTime*1000)) mqtt.windAlarm = false;
-     if ((mqtt.rainAlarm) &&
-         (millis()-rainAlarmTime > mqtt.rainAlarmResetTime*1000)) mqtt.rainAlarm = false;
-
-     // getSensors();
-     // aok.countOneMinute();
+     // do work while wait for connection
      mqtt.battery = adc.read(BATTERY_PIN,BATTERY_DIVIDER);
      mqtt.solarVolt = adc.read(SOLAR_ADC_PIN,SOLAR_DIVIDER);
-     // stop load battery for new calibration of MPPT
-     if (mqtt.solarVolt < SOLAR_MIN_MPPT_VOLTAGE) digitalWrite(SOLAR_POWER_PIN, LOW);
      byte windD = aok.getWindDirektion();
      if (windD < 16) mqtt.windDirection=windD;
+     mqtt.rain = aok.getRain(mqtt.rainPerTic);
      mqtt.rain1h  = aok.getRain1h(mqtt.rainPerTic);
      mqtt.rain24h = aok.getRain24h(mqtt.rainPerTic);
      mqtt.windSpeed = aok.getWindSpeed(mqtt.windSpeedPerTic);
@@ -267,40 +270,56 @@ void cycleLoop() {
      mqtt.humidity = bme.readHumidity();
      float Th = mqtt.temperature + 273.15;
      mqtt.pressure = bme.readPressure()/100.0F * pow( Th / (Th + (0.0065 * mqtt.altitude)), -5.255);
-     // send MQTT
-     esp_wifi_start();
-     if (wifiConnect()) {
-       mqtt.loop();
-     }
-     esp_wifi_stop();
-     digitalWrite(SOLAR_POWER_PIN, HIGH);
 }
 
 
 byte loopCountMinute = 0;
 int loopCountAll = 0;
+boolean send = false;
 
 void loop() {
   startTime = millis() ;
-  DEBUG_printf("everyLoop------------------------- %lu\n\n",millis()-oneMinute);
-  everyLoop();
+  // dog.feed();
+  DEBUG_printf("everyLoop------------------------- %lu/%lu\n\n",millis()-oneMinute,millis() - cycleStartTime);
+  aok.startWindSpeed();
+
+  if (millis() - cycleStartTime >= cycleTime) {
+    cycleStartTime = millis();
+    DEBUG_printf("Cycle Hardbeat_________________________ %lu\n",millis() - cycleStartTime);
+    cycleLoop();
+    cycleTime =  (unsigned long)mqtt.cycle * 1000; //if Updated
+    send=true;
+  }
+
+  if (checkRainAlarm()) send = true;  // every loop
+
 
  if (millis() - oneMinute >= 60000) {
-   DEBUG_printf("One Minute Hardbeat____________________ %lu\n\n",millis()-oneMinute);
    oneMinute = millis();
+   DEBUG_println("One Minute Hardbeat____________________");
    mqtt.upTime++;
    aok.countOneMinute();
+   // stop load battery for new calibration of MPPT
+   if (mqtt.solarVolt < SOLAR_MIN_MPPT_VOLTAGE) digitalWrite(SOLAR_POWER_PIN, LOW);
  }
 
-if (millis() - cycleStartTime >= cycleTime) {
-   DEBUG_printf("Cycle Hardbeat_________________________ %lu\n",millis() - cycleStartTime);
-   cycleStartTime = millis();
-   cycleLoop();
-   cycleTime =  (unsigned long)mqtt.cycle * 1000; //if Updated
+ mqtt.windSpeedNow = aok.stopWindSpeed(mqtt.windSpeedPerTic); //every loop
+
+
+ if (checkWindAlarm() && !send) {
+   send=true;
  }
 
-unsigned long neededTime =  millis()-startTime; // needed Time
-DEBUG_printf("Aktive Loop needs : %lu ms\n\n",neededTime);
-if (neededTime<10000) goSleep(10000-neededTime);
+ if (send) {
+   if (wifiConnect()) mqtt.loop();
+   mqtt.wifiRSSI = WiFi.RSSI();
+   wifiDisconnect();
+   send = false;
+ }
+digitalWrite(SOLAR_POWER_PIN, HIGH);  // Start load Battery
+DEBUG_printf("Aktive Loop needs : %lu ms\n\n",millis()-startTime);
+delay(100);
+unsigned long neededTime=millis()-startTime;
+if (neededTime<10000) goSleep(10000-neededTime);            // go sleep
 DEBUG_printf("Loop needs : %lu ms\n",millis()-startTime);
 }

@@ -65,6 +65,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #define TAG_BRIGHTNESS            MQTT_ROOT "Brightness"
 #define TAG_BATTERY               MQTT_ROOT "Battery"
 #define TAG_SOLARVOLT             MQTT_ROOT "SolarVoltage"
+#define TAG_WIFIRSSI              MQTT_ROOT "WiFiRSSI"
 
 const char *direction[] = {"N","NNO","NO","ONO","O","OSO","SO","SSO",
                            "S","SSW","SW","WSW","W","WNW","NW","NNW"} ;
@@ -239,6 +240,10 @@ void WeatherMQTT::pub(String tag,unsigned short value) {
   pub(tag,String(value));
 }
 
+void WeatherMQTT::pub(String tag,long value) {
+  pub(tag,String(value));
+}
+
 void WeatherMQTT::pub(String tag,boolean value) {
   if (value) pub(tag,String("ON"));
   else pub(tag,String("OFF"));
@@ -276,6 +281,7 @@ void WeatherMQTT::publishAll() {
   pub(TAG_BRIGHTNESS,this->brightness);
   pub(TAG_BATTERY,this->battery);
   pub(TAG_SOLARVOLT,this->solarVolt);
+  pub(TAG_WIFIRSSI,this->wifiRSSI);
 }
 
 

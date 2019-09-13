@@ -23,11 +23,14 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 #define WIND_SPEED_MIN_MESSURE_TIME 1000
 
+portMUX_TYPE mux = portMUX_INITIALIZER_UNLOCKED;
+
 
 // Rain handling
 volatile unsigned long rainTicks;
 volatile unsigned long lastRainTick;
 unsigned long  rainCycle;           // Rain in the cycle
+unsigned long  rainMinute;           // Rain in the cycle
 unsigned short rain1hArray[60];     // rain last 60 minutes
 byte           rain1hIndex;
 unsigned short rain24hArray[24];    // rain last day
@@ -36,7 +39,9 @@ byte           rain24hIndex;
 
 void IRAM_ATTR isrRain() {
   if ((millis()-lastRainTick) > 50) { // kill all bounds les 50 ms
+     portENTER_CRITICAL_ISR(&mux);
     rainTicks++;
+     portEXIT_CRITICAL_ISR(&mux);
     lastRainTick = millis();
   }
 }
@@ -46,7 +51,7 @@ void IRAM_ATTR isrRain() {
 volatile byte windTicks;
 volatile unsigned long lastWindTick;
 unsigned long startWindTime;
-volatile unsigned long  windSpeedArray[5];  // max Windspeed messure points
+volatile unsigned long  windSpeedArray[3];  // max Windspeed messure points
 unsigned short windSpeedAverage[6];  // 1 Minute (6*10) times every Minute
 unsigned short windSpeed10Average[10]; // 10 Minute  times every Minute
 byte     windSpeedAverageIndex;
@@ -57,10 +62,12 @@ unsigned long messMillis;
 void IRAM_ATTR isrWind() {
    messMillis = millis();
   if ((messMillis-lastWindTick) > 5) { // kill all bounds les 5 ms
+    portENTER_CRITICAL_ISR(&mux);
     if (windTicks < 3) windSpeedArray[windTicks] = messMillis;
       windTicks++;
       lastWindTick = messMillis;
-  }
+    portEXIT_CRITICAL_ISR(&mux);
+ }
 }
 
 
@@ -75,12 +82,13 @@ void AOK5055::begin(uint8_t rainPin, uint8_t powerPin, uint8_t windSpeedPin, uin
   this->windDirectionPin = windDirectionPin;
   rainTicks = 0;
   rainCycle = 0;
+  rainMinute = 0;
   for (i=0;i<60;i++) rain1hArray[i] = 0;     // tics last 60 minutes
   rain1hIndex=0;
   for (i=0;i<24;i++) rain24hArray[i]=0;    // tics last day
   rain24hIndex=0;
-  for (i=0;i<6;i++) windSpeedAverage[i]=WIND_SPEED_MIN_MESSURE_TIME*2;
-  for (i=0;i<10;i++) windSpeed10Average[i]=WIND_SPEED_MIN_MESSURE_TIME*2;
+  for (i=0;i<6;i++) windSpeedAverage[i]=0xFFFF;
+  for (i=0;i<10;i++) windSpeed10Average[i]=0xFFFF;
   windSpeedAverageIndex = 0;
   windSpeed10AverageIndex = 0;
   pinMode(rainPin,INPUT);
@@ -101,7 +109,6 @@ unsigned long windStartTime;
 
 void AOK5055::startWindSpeed() {
   windTicks=0;
-// digitalWrite(4,HIGH);
   lastRainTick = millis();
   startWindTime=millis();
   attachInterrupt(digitalPinToInterrupt(this->windSpeedPin),isrWind, FALLING);
@@ -109,9 +116,16 @@ void AOK5055::startWindSpeed() {
 
 float AOK5055::stopWindSpeed(float windSpeedPerTic) {
   float windSpeedNow = 0.0;
+  portENTER_CRITICAL(&mux);
+  byte wt = windTicks;
+  portEXIT_CRITICAL(&mux);
   while (((millis() - startWindTime) <= WIND_SPEED_MIN_MESSURE_TIME) &&
-           (windTicks < 3) ) delay(10);
-  // digitalWrite(4,LOW);  // Test only
+           (wt < 3) ) {
+             delay(10);
+             portENTER_CRITICAL(&mux);
+             wt = windTicks;
+             portEXIT_CRITICAL(&mux);
+           }
   detachInterrupt(digitalPinToInterrupt(this->windSpeedPin));
   DEBUG_printf("WindSpeed needs: %lu ms",millis() - startWindTime);
   // ToDo Speed berechnen
@@ -188,31 +202,41 @@ byte AOK5055::getWindDirektion() {
 
 
 void AOK5055::countOneMinute(){
-  rain1hArray[rain1hIndex] = rainTicks;
+  portENTER_CRITICAL(&mux);
+  unsigned long rt=rainTicks;
+  portEXIT_CRITICAL(&mux);
+  unsigned short rain = rt-rainMinute;
+  rain1hArray[rain1hIndex] = rain;
+  rain24hArray[rain24hIndex] += rain;
+  rainMinute = rt;
+  DEBUG_printf("Last Minute rain #%d Ticks\n", rain1hArray[rain1hIndex] );
   if (++rain1hIndex >= 60) {
     rain1hIndex = 0;
-    rain24hArray[rain24hIndex] = rainTicks;
     if (++rain24hIndex >= 24) rain24hIndex = 0;
+    rain24hArray[rain24hIndex] = 0;
   }
 }
 
 float AOK5055::getRain(float rainPerTic) {  // Return Rain of last cycle
-  float rain = rainPerTic * (float)(rainTicks-rainCycle);
-  DEBUG_printf("getRain Tics Summe: #%lu, Delta: #%lu, Rain %fmm\n",rainTicks,rainTicks-rainCycle,rain);
-  rainCycle = rainTicks;
+  portENTER_CRITICAL(&mux);
+  unsigned long rt=rainTicks;
+  portEXIT_CRITICAL(&mux);
+  float rain = rainPerTic * (float)(rt-rainCycle);
+  DEBUG_printf("getRain Tics Summe: #%lu, Delta: #%lu, Rain %fmm\n",rt,rt-rainCycle,rain);
+  rainCycle = rt;
 return rain;
 }
 
 float AOK5055::getRain1h(float rainPerTic){
-  byte firstIndex;
-  if (rain1hIndex < 60 ) firstIndex = rain1hIndex + 1;
-  else firstIndex = 0;
-  return  rainPerTic * (float)(rain1hArray[rain1hIndex] - rain1hArray[firstIndex]);
+  unsigned short rain=0;
+  for (int i=0; i<60; i++) rain += rain1hArray[i];
+  DEBUG_printf("Last Hour rain #%d Ticks = %f mm\n", rain, rainPerTic * (float)(rain));
+  return  rainPerTic * (float)(rain);
 }
 
-float AOK5055::getRain24h(float rainPerTic){ // Return Rain of last 24h
-  byte firstIndex;
-  if (rain24hIndex < 24 ) firstIndex = rain1hIndex + 1;
-  else firstIndex = 0;
-  return  rainPerTic * (float)(rain24hArray[rain24hIndex] - rain24hArray[firstIndex]);
+float AOK5055::getRain24h(float rainPerTic){ // Return Rain of last 24h witgout last hour
+  unsigned short rain=0;
+  for (int i=0; i<24; i++) rain += rain24hArray[i];
+  DEBUG_printf("Last 24Hour rain #%d Ticks\n", rain);
+  return  rainPerTic * (float)(rain);
 }

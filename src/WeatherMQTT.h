@@ -36,6 +36,7 @@ private:
 	void pub(String tag,byte value);
 	void pub(String tag,unsigned short value);
 	void pub(String tag,boolean value);
+	void pub(String tag,long value);
 	void publishAll();
 
 public:
@@ -62,8 +63,9 @@ public:
 	unsigned short pressure;        // mbar
 	unsigned short altitude;      //altitude over NN
 	unsigned short brightness;      // 0..64000
-	byte battery;         // 0..100% (0=3.3V 100=4.2V)
+	float battery;               // voltage
 	float solarVolt;
+	long wifiRSSI;
 
 	WeatherMQTT();
 	void begin(const char server[],const char* clientID,const char* user,const char* password);
